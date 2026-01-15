@@ -41,26 +41,56 @@ The score distribution shows a clear separation between positive and negative pa
 ## 🛠️ Installation & Usage
 
 ### Prerequisites
+
+**1. Environment Setup**
 ```bash
 conda env create -f environment.yml
 conda activate protrek
 ```
 
-### 1. Data Preparation (Hard Mining)
-To reproduce our mining process (generating Anchor-Positive-HardNegative triplets):
+**2. Download Original Weights**
+Since we fine-tune based on the original ProTrek, please download the base model (e.g., `ProTrek_650M`) and place it in the `weights/` directory.
+* **[Insert Link to Original ProTrek Weights Here]**
+
+---
+
+### 1. Hard Negative Mining (Data Generation)
+We generate the training triplets (Anchor-Positive-HardNegative) from the original dataset.
+* **Input:** The original ProTrek dataset (`dataset/protrek_data.tsv`)
+* **Output:** A CSV file containing mined hard negatives.
+
 ```bash
-python data_processing.py --input raw_data.tsv --output dataset/hard_negatives_train.csv
+# This script uses the base model to calculate semantic differences
+# Note: Ensure your data_processing.py accepts these arguments
+python data_processing.py \
+  --input dataset/protrek_data.tsv \
+  --output dataset/hard_negatives_train.csv \
+  --model_path weights/ProTrek_650M
 ```
 
 ### 2. Fine-tuning
-Run the training pipeline with Triplet Margin Loss:
+Train the model using the mined hard triplets and Triplet Margin Loss.
+
 ```bash
 python model_training.py \
   --train_data dataset/hard_negatives_train.csv \
+  --base_model weights/ProTrek_650M \
   --epochs 30 \
-  --lr 1e-5
+  --lr 1e-5 \
+  --save_dir weights/ProTrek-HM
 ```
-*(See `loss_curve.png` in `evaluation_results/` for training stability)*
+
+*(Check `evaluation_results/loss_curve.png` for training progress)*
+
+### 3. Evaluation & Visualization
+After training, run the evaluation script to reproduce the paper's figures (Accuracy, t-SNE, Score Distribution).
+
+```bash
+python evaluate.py \
+  --model_path weights/ProTrek-HM/final_checkpoint.pt \
+  --test_data dataset/hard_negatives_test.csv \
+  --output_dir evaluation_results/
+```
 
 ## 📂 Repository Structure
 
