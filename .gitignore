@@ -1,14 +1,50 @@
-/weights/ProTrek_35M_UniRef50/CLAProt_35M_UniRef50.pt
-/weights/ProTrek_35M_UniRef50/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext/config.json
-/weights/ProTrek_35M_UniRef50/esm2_t12_35M_UR50D/config.json
-/weights/ProTrek_35M_UniRef50/foldseek_t12_35M/config.json
-/weights/ProTrek_35M_UniRef50/esm2_t12_35M_UR50D/special_tokens_map.json
-/weights/ProTrek_35M_UniRef50/foldseek_t12_35M/special_tokens_map.json
-/weights/ProTrek_35M_UniRef50/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext/tokenizer_config.json
-/weights/ProTrek_35M_UniRef50/esm2_t12_35M_UR50D/tokenizer_config.json
-/weights/ProTrek_35M_UniRef50/foldseek_t12_35M/tokenizer_config.json
-/weights/ProTrek_35M_UniRef50/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext/vocab.txt
-/weights/ProTrek_35M_UniRef50/esm2_t12_35M_UR50D/vocab.txt
-/weights/ProTrek_35M_UniRef50/foldseek_t12_35M/vocab.txt
-/test.ipynb
-/test.py
+cat <<EOF > .gitignore
+# --- 屏蔽核心重资产 ---
+weights/
+checkpoints/
+faiss_index/
+dataset/
+data/
+bin/
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.onnx
+
+# --- 屏蔽临时文件 ---
+__pycache__/
+*.pyc
+.ipynb_checkpoints
+.DS_Store
+.idea/
+.vscode/
+project.zip
+*.log
+wandb/
+
+# --- 💡例外规则：必须保留的文件 ---
+# 保留 README 中引用的硬负样本示例图
+!dataset/hard_negative_examples.png
+EOF
+
+# --- 🚫 屏蔽特定垃圾文件 ---
+# 屏蔽 IP 标记文件
+*.flag
+# 屏蔽所有 Excel (除非你非要传)
+*.xlsx
+# 屏蔽手动备份的副本
+*copy.py
+*副本*
+
+# --- 📉 屏蔽海量中间结果 CSV ---
+# 我们只想要代码和图，不想要几千个 CSV 日志
+project/result/query/
+project/result/step*/reviewed/
+project/result/step*/unreviewed/
+# 如果你只想保留总结性的 CSV，可以屏蔽所有 CSV
+*.csv
+
+# --- 🛡️ 重新通过白名单保留重要文件 ---
+# 如果你有某些特定的 CSV 必须传（比如 dataset 里的），可以用 ! 强制保留
+# !dataset/hard_negatives_train.csv
