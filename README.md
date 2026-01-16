@@ -12,85 +12,159 @@ While the original ProTrek excels at general protein-text retrieval, it struggle
 
 | Metric | Original Baseline | **ProTrek-HM (Ours)** | Improvement |
 | :--- | :---: | :---: | :---: |
-| **Hard Sample Accuracy** | 56.2% | **90.5%** | **+34.3%** 🔺 |
-| Easy Sample Accuracy | 98.1% | 90.4% | -7.7% |
+| **Hard Sample Accuracy** | 56.2% | **89.8%** | **+33.6%** 🔺 |
+| Easy Sample Accuracy | 98.1% | 91.0% | -7.1% |
 | Semantic Separation | Low | High | See Visualization |
 
 > **Core Logic:** We strictly mined "Anchor-Positive-HardNegative" triplets where negatives have high sequence similarity but distinct textual semantics.
 
-## 📊 Performance Visualization
+---
 
-### 1. The Challenge: "Twin" Proteins
-We identified hard negatives where a single point mutation leads to a functional shift, yet standard models fail to distinguish them.
-![Hard Negative Example](dataset/hard_negative_examples.png)
-*(Note: Visualizes the sequence alignment and semantic gap)*
+## 🛠️ Step-by-Step Reproduction Guide
 
-### 2. Quantitative Improvement
-Fine-tuning significantly boosts performance on hard samples, effectively solving the "confusion" problem.
-![Accuracy Comparison](evaluation_results/1_accuracy_comparison.png)
+To fully reproduce our results, please follow the 4 steps below strictly.
 
-### 3. Embedding Space Evolution (t-SNE)
-**Left (Baseline):** Hard negatives cluster closely with anchors (Confusion).  
-**Right (Ours):** The model learns to push hard negatives away while keeping anchors and text aligned.
-![t-SNE Visualization](evaluation_results/3_tsne_top3_focus.png)
+### 📦 Step 1: Environment & Verification
 
-### 4. Discriminative Power
-The score distribution shows a clear separation between positive and negative pairs after fine-tuning.
-![Score Distribution](evaluation_results/2_score_distribution.png)
-
-## 🛠️ Installation & Usage
-
-### Prerequisites
-
-**1. Environment Setup**
+**1. Install Dependencies**
+Follow the instruction from the original ProTrek repository to set up the Conda environment.
 ```bash
 conda env create -f environment.yml
 conda activate protrek
 ```
 
-**2. Download Original Weights**
-Since we fine-tune based on the original ProTrek, please download the base model (e.g., `ProTrek_650M`) and place it in the `weights/` directory.
-* **[Insert Link to Original ProTrek Weights Here]**
+**2. Verify Installation (Crucial)**
+We use **ProTrek_35M** in this project (different from the default 650M). Please ensure you have downloaded the 35M weights into the `weights/` directory.
+
+Run the following Python script to verify the model loads correctly and produces embeddings:
+
+```python
+import torch
+from model.ProTrek.protrek_trimodal_model import ProTrekTrimodalModel
+from utils.foldseek_util import get_struc_seq
+
+# 1. Load configuration (Using ProTrek_35M)
+# Note: Paths updated from 650M to 35M versions
+config = {
+    "protein_config": "weights/ProTrek_35M/esm2_t12_35M_UR50D",
+    "text_config": "weights/ProTrek_35M/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext",
+    "structure_config": "weights/ProTrek_35M/foldseek_t12_35M",
+    "from_checkpoint": "weights/ProTrek_35M/ProTrek_35M.pt"
+}
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Loading model on {device}...")
+model = ProTrekTrimodalModel(**config).eval().to(device)
+
+# 2. Load example data
+pdb_path = "example/8ac8.cif"
+# Ensure the bin/foldseek path is correct for your environment
+seqs = get_struc_seq("bin/foldseek", pdb_path, ["A"])["A"]
+aa_seq = seqs[0]
+foldseek_seq = seqs[1].lower()
+text = "Replication initiator in the monomeric form, and autogenous repressor in the dimeric form."
+
+# 3. Inference
+with torch.no_grad():
+    # Obtain embeddings
+    seq_embedding = model.get_protein_repr([aa_seq])
+    print("Protein sequence embedding shape:", seq_embedding.shape)
+    
+    struc_embedding = model.get_structure_repr([foldseek_seq])
+    print("Protein structure embedding shape:", struc_embedding.shape)
+    
+    text_embedding = model.get_text_repr([text])
+    print("Text embedding shape:", text_embedding.shape)
+    
+    # Calculate Similarity Scores
+    seq_struc_score = seq_embedding @ struc_embedding.T / model.temperature
+    print("Similarity score between protein sequence and structure:", seq_struc_score.item())
+
+    seq_text_score = seq_embedding @ text_embedding.T / model.temperature
+    print("Similarity score between protein sequence and text:", seq_text_score.item())
+    
+    struc_text_score = struc_embedding @ text_embedding.T / model.temperature
+    print("Similarity score between protein structure and text:", struc_text_score.item())
+```
+
+**Expected Output:**
+```text
+Protein sequence embedding shape: torch.Size([1, 1024])
+Protein structure embedding shape: torch.Size([1, 1024])
+Text embedding shape: torch.Size([1, 1024])
+Similarity score between protein sequence and structure: 28.506...
+Similarity score between protein sequence and text: 17.842...
+Similarity score between protein structure and text: 11.866...
+```
 
 ---
 
-### 1. Hard Negative Mining (Data Generation)
-We generate the training triplets (Anchor-Positive-HardNegative) from the original dataset.
-* **Input:** The original ProTrek dataset (`dataset/protrek_data.tsv`)
-* **Output:** A CSV file containing mined hard negatives.
+### 📥 Step 2: Prepare Codebase
+Ensure the core scripts are placed in the root of the repository (parallel to `model/` folder):
+* `data_processing.py`
+* `model_training.py`
+* `evaluate.py`
 
+---
+
+### 🗃️ Step 3: Prepare Data
+1. Download the original **ProTrek_data**.
+2. Place the `protrek_data.tsv` file in the root directory (or parallel path).
+3. Ensure the script arguments in Step 4 point to the correct location of this file.
+
+---
+
+### 🚀 Step 4: Run the Full Pipeline
+
+Run the scripts in the following sequence.
+
+**1. Generate Hard Negatives**
 ```bash
-# This script uses the base model to calculate semantic differences
-# Note: Ensure your data_processing.py accepts these arguments
 python data_processing.py \
-  --input dataset/protrek_data.tsv \
+  --input protrek_data.tsv \
   --output dataset/hard_negatives_train.csv \
-  --model_path weights/ProTrek_650M
+  --model_path weights/ProTrek_35M/ProTrek_35M.pt
 ```
+> **Output:** You will see `hard_negative_examples.png` in the `evaluation_results/` directory.
 
-### 2. Fine-tuning
-Train the model using the mined hard triplets and Triplet Margin Loss.
-
+**2. Model Fine-tuning**
 ```bash
 python model_training.py \
   --train_data dataset/hard_negatives_train.csv \
-  --base_model weights/ProTrek_650M \
+  --base_model weights/ProTrek_35M/ProTrek_35M.pt \
   --epochs 30 \
-  --lr 1e-5 \
-  --save_dir weights/ProTrek-HM
+  --save_dir weights/ProTrek_35M
 ```
+> **Output:** You will see `loss_curve.png` generated in `weights/ProTrek_35M/`.
 
-*(Check `evaluation_results/loss_curve.png` for training progress)*
-
-### 3. Evaluation & Visualization
-After training, run the evaluation script to reproduce the paper's figures (Accuracy, t-SNE, Score Distribution).
-
+**3. Evaluation**
 ```bash
 python evaluate.py \
-  --model_path weights/ProTrek-HM/final_checkpoint.pt \
+  --model_path weights/ProTrek_35M/protrek_finetuned_epoch30.pt \
   --test_data dataset/hard_negatives_test.csv \
   --output_dir evaluation_results/
 ```
+> **Output:** The following plots will be generated in `evaluation_results/`:
+> * `1_accuracy_comparison.png`
+> * `2_score_distribution.png`
+> * `3_tsne_top3_focus.png`
+
+---
+
+## 📊 Results Gallery
+
+**1. Accuracy Comparison**
+Fine-tuning significantly boosts performance on hard samples.
+![Accuracy](evaluation_results/1_accuracy_comparison.png)
+
+**2. Embedding Space Evolution (t-SNE)**
+**Left (Baseline):** Hard negatives cluster closely with anchors.
+**Right (Ours):** The model learns to push hard negatives away.
+![t-SNE](evaluation_results/3_tsne_top3_focus.png)
+
+**3. Discriminative Power**
+Clear separation between positive and negative pairs.
+![Score Dist](evaluation_results/2_score_distribution.png)
 
 ## 📂 Repository Structure
 
@@ -101,5 +175,6 @@ python evaluate.py \
 ├── evaluate.py             # Evaluation & plotting scripts
 ├── evaluation_results/     # Generated plots (Accuracy, t-SNE, etc.)
 ├── example/                # Sample data
+├── weights/                # Model checkpoints (ProTrek_35M)
 └── environment.yml         # Dependencies
 ```

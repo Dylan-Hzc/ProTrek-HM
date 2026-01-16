@@ -8,8 +8,9 @@ import os
 import logging
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-BATCH_SIZE = 24
+BATCH_SIZE = 16
 LEARNING_RATE = 1e-5  # 全量微调建议使用较小的学习率
 EPOCHS = 30  # 训练轮数
 MARGIN = 0.2  # Triplet Loss 边界
@@ -153,21 +154,33 @@ def train():
     logger.info("Training Finished.")
 
     # ================= 6. 绘制 Loss 曲线 =================
-    logger.info("Plotting loss curve...")
+    logger.info("Plotting smoothed training dynamics...")
     try:
         plt.switch_backend('Agg')
+        sns.set_theme(style="whitegrid", context="paper")
 
         plt.figure(figsize=(10, 6))
-        plt.plot(range(1, EPOCHS + 1), loss_history, marker='o', linestyle='-', color='b', label='Train Loss')
-        plt.title('Training Loss Curve (Fine-tuning)')
-        plt.xlabel('Epoch')
-        plt.ylabel('Triplet Margin Loss')
-        plt.grid(True)
-        plt.legend()
+
+        # 计算滑动平均
+        window = 10
+        rolling_avg = pd.Series(loss_history).rolling(window=window, min_periods=1).mean()
+
+        # 绘制原始曲线 (高透明度)
+        plt.plot(range(1, len(loss_history) + 1), loss_history, color='#3498db', alpha=0.3, label='Raw Epoch Loss', marker='o', markersize=4)
+        # 绘制平滑曲线 (加粗深色)
+        plt.plot(range(1, len(loss_history) + 1), rolling_avg, color='#2c3e50', linewidth=2.5, label=f'Rolling Average (w={window})')
+
+        plt.title('Contrastive Triplet Loss Optimization', fontsize=14, fontweight='bold', pad=20)
+        plt.xlabel('Epoch', fontsize=12)
+        plt.ylabel('Triplet Margin Loss', fontsize=12)
+
+        sns.despine()
+        plt.legend(frameon=True, loc='upper right')
+        plt.grid(axis='y', linestyle='--', alpha=0.4)
 
         # 保存图片
         plot_path = os.path.join(SAVE_DIR, "loss_curve.png")
-        plt.savefig(plot_path)
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         logger.info(f"Loss curve saved to: {plot_path}")
 
         # 保存 CSV 数据

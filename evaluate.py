@@ -16,14 +16,15 @@ from tqdm import tqdm
 plt.rcParams["font.family"] = "sans-serif"
 plt.rcParams["font.sans-serif"] = ["Arial", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
-sns.set_theme(style="whitegrid", context="talk", font_scale=1.0)
+sns.set_theme(style="whitegrid", context="paper")
 
-# 蓝色(正), 红色(负), 灰色(背景)
+# 更新为更专业、对比度更高的配色
 COLORS = {
-    "pos": "#2E86C1",  # 强蓝色
-    "neg": "#C0392B",  # 深红色
-    "bg": "#D5D8DC",  # 浅灰色
-    "groups": ["#1ABC9C", "#9B59B6", "#F39C12"],  # Top3 组的专属色 (绿, 紫, 橙)
+    "pos": "#48C9B0",  # 湖绿色 (Soft Green/Blue)
+    "neg": "#E74C3C",  # 珊瑚红 (Red/Orange)
+    "bg": "#BDC3C7",  # 灰色基调
+    "accent": "#2E86C1",  # 强调蓝
+    "groups": sns.color_palette("Set2", 3).as_hex(),
 }
 
 # ================= ⚙️ 路径与配置 =================
@@ -100,34 +101,45 @@ def get_scores_and_embeddings(model, df):
 
 def plot_bar_chart_pro(acc_data):
     """
-    图 1: 准确率对比 (极简风)
+    图 1: 准确率对比 (Grouped Bar Chart with soft colors)
     """
     logger.info("Plotting Pro Bar Chart...")
-    plt.figure(figsize=(7, 6))
+    plt.figure(figsize=(8, 6))
 
     df = pd.DataFrame(acc_data)
 
-    # 绘制柱状图
+    # 绘制分组柱状图
     ax = sns.barplot(
         data=df,
         x="Dataset",
         y="Accuracy",
         hue="Model",
-        palette=[COLORS["bg"], COLORS["pos"]],
+        palette="Set2",
         edgecolor=".2",
+        linewidth=1,
+        alpha=0.9,
     )
 
-    sns.despine(top=True, right=True)
-    plt.ylim(0, 110)
-    plt.ylabel("Accuracy (%)", fontweight="bold")
+    sns.despine()
+    plt.ylim(0, 115)
+    plt.ylabel("Accuracy (%)", fontsize=11, fontweight="bold")
     plt.xlabel("")
-    plt.title("Model Performance Improvement", fontweight="bold", pad=20)
-    plt.legend(frameon=False, loc="upper left", markerscale=0.5, fontsize="x-small")
-    plt.grid(axis="y", linestyle="--", alpha=0.5)
+    plt.title(
+        "Classification Accuracy Comparison", fontsize=14, fontweight="bold", pad=20
+    )
+    plt.legend(frameon=True, loc="upper left", fontsize="small", title="Model Type")
+    plt.grid(axis="y", linestyle="--", alpha=0.3)
 
     # 标注数值
     for container in ax.containers:
-        ax.bar_label(container, fmt="%.1f%%", padding=3, fontweight="bold")
+        ax.bar_label(
+            container,
+            fmt="%.1f%%",
+            padding=5,
+            fontsize=10,
+            fontweight="bold",
+            color="#2c3e50",
+        )
 
     plt.tight_layout()
     plt.savefig(os.path.join(SAVE_DIR, "1_accuracy_comparison.png"), dpi=300)
@@ -136,208 +148,180 @@ def plot_bar_chart_pro(acc_data):
 
 def plot_kde_pro(base_scores, ft_scores):
     """
-    图 2: 分数分布
+    图 2: 分数分布 (KDE with fill=True)
     """
     logger.info("Plotting Pro KDE...")
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
 
-    # Helper to plot one subplot
     def draw_kde(ax, pos, neg, title):
         sns.kdeplot(
             pos,
             ax=ax,
             fill=True,
             color=COLORS["pos"],
-            alpha=0.3,
-            linewidth=2,
-            label="Positive Pair",
+            alpha=0.4,
+            linewidth=2.5,
+            label="Positive Pairs",
         )
         sns.kdeplot(
             neg,
             ax=ax,
             fill=True,
             color=COLORS["neg"],
-            alpha=0.3,
-            linewidth=2,
-            label="Negative Pair",
+            alpha=0.4,
+            linewidth=2.5,
+            label="Negative Pairs",
         )
-        ax.set_title(title, fontweight="bold", fontsize=14)
-        ax.set_xlabel("Similarity Score")
-        ax.grid(linestyle=":", alpha=0.6)
+        ax.set_title(title, fontweight="bold", fontsize=13, pad=15)
+        ax.set_xlabel("Similarity Score", fontsize=11)
+        ax.set_ylabel("Density", fontsize=11)
+        ax.grid(axis="both", linestyle="--", alpha=0.3)
         sns.despine(ax=ax)
 
     draw_kde(
-        axes[0], base_scores["pos"], base_scores["neg"], "Baseline Model (Confused)"
+        axes[0],
+        base_scores["pos"],
+        base_scores["neg"],
+        "Baseline (ProTrek-35M Zero-shot)",
     )
-    draw_kde(axes[1], ft_scores["pos"], ft_scores["neg"], "Finetuned Model (Separated)")
+    draw_kde(
+        axes[1],
+        ft_scores["pos"],
+        ft_scores["neg"],
+        "Finetuned (Optimized Embedding Space)",
+    )
 
-    axes[0].legend(frameon=False, loc="upper left")
+    axes[0].legend(frameon=True, loc="upper right", fontsize="small")
 
     plt.suptitle(
-        "Score Distribution Shift on Hard Negatives", fontweight="bold", y=0.97
+        "Contrastive Score Distribution: Overcoming Hard Negatives",
+        fontweight="bold",
+        fontsize=16,
+        y=1.02,
     )
     plt.tight_layout()
-    plt.savefig(os.path.join(SAVE_DIR, "2_score_distribution.png"), dpi=300)
+    plt.savefig(
+        os.path.join(SAVE_DIR, "2_score_distribution.png"), dpi=300, bbox_inches="tight"
+    )
     plt.close()
 
 
 def plot_focused_tsne(base_emb, ft_emb, top_indices):
     logger.info("Plotting Focused t-SNE...")
 
-    # 准备背景数据
+    # 准备数据
     n_bg = 50
     bg_indices = np.random.choice(len(base_emb["text"]), n_bg, replace=False)
-
-    # 准备 Top 3 数据
     target_indices = top_indices
-
-    # 合并索引
     all_indices = list(set(list(bg_indices) + list(target_indices)))
 
     fig, axes = plt.subplots(1, 2, figsize=(18, 9))
 
     for i, (emb_dict, title) in enumerate(
-        [(base_emb, "Baseline Space"), (ft_emb, "Finetuned Space")]
+        [(base_emb, "Baseline Latent Space"), (ft_emb, "Finetuned Latent Space")]
     ):
         ax = axes[i]
-
-        # 1. 收集这一轮要画的所有向量
         vectors = []
-        labels = []  # 用来标记属于哪个组
-
-        # 结构：[Text_1...Text_N, Anchor_1...Anchor_N, Neg_1...Neg_N]
         for idx in all_indices:
             vectors.append(emb_dict["text"][idx].flatten())
             vectors.append(emb_dict["anchor"][idx].flatten())
             vectors.append(emb_dict["hard_neg"][idx].flatten())
-
         vectors = np.array(vectors)
 
-        # 2. 降维 (PCA 初始化 + t-SNE 微调，保证结构稳定)
         reducer = TSNE(
             n_components=2, perplexity=10, random_state=42, init="pca", learning_rate=50
         )
         embedded = reducer.fit_transform(vectors)
 
-        # 3. 绘图
-        n_samples = len(all_indices)
-
-        # A. 先画背景 (灰色，透明)
-        # 坐标映射: index j 对应 embedded 中的 [3*j, 3*j+1, 3*j+2]
+        # 1. 绘制背景点 (极简，低透明度)
         for j, list_idx in enumerate(all_indices):
             if list_idx in target_indices:
-                continue  # 跳过 Top 3，最后画
+                continue
+            ax.scatter(
+                embedded[3 * j : 3 * j + 3, 0],
+                embedded[3 * j : 3 * j + 3, 1],
+                c="#D5D8DC",
+                s=20,
+                alpha=0.15,
+                zorder=1,
+            )
 
-            t_xy = embedded[3 * j]
-            a_xy = embedded[3 * j + 1]
-            n_xy = embedded[3 * j + 2]
-
-            # 画点
-            ax.scatter(t_xy[0], t_xy[1], c=COLORS["bg"], s=30, alpha=0.3)
-            ax.scatter(a_xy[0], a_xy[1], c=COLORS["bg"], s=30, alpha=0.3)
-            ax.scatter(n_xy[0], n_xy[1], c=COLORS["bg"], s=30, alpha=0.3)
-
-        # B. 再画 Top 3 (高亮，带连线)
-        legend_elements = []  # 手动图例
-
+        # 2. 绘制 Top 3 重点样本
         for k, target_idx in enumerate(target_indices):
-            # 找到 target_idx 在 all_indices 中的位置
             j = all_indices.index(target_idx)
-
-            t_xy = embedded[3 * j]
-            a_xy = embedded[3 * j + 1]
-            n_xy = embedded[3 * j + 2]
-
+            t_xy, a_xy, n_xy = embedded[3 * j], embedded[3 * j + 1], embedded[3 * j + 2]
             group_color = COLORS["groups"][k]
 
-            # 画连线 (虚线)
+            # 绘制细灰色连线 (Anchor -> Text, Anchor -> Negative)
             ax.plot(
-                [t_xy[0], a_xy[0]],
-                [t_xy[1], a_xy[1]],
-                color=group_color,
+                [a_xy[0], t_xy[0]],
+                [a_xy[1], t_xy[1]],
+                color="#BDC3C7",
                 linestyle="-",
-                alpha=0.6,
-                linewidth=1.5,
+                linewidth=0.8,
+                alpha=0.5,
+                zorder=2,
             )
             ax.plot(
-                [t_xy[0], n_xy[0]],
-                [t_xy[1], n_xy[1]],
-                color=group_color,
+                [a_xy[0], n_xy[0]],
+                [a_xy[1], n_xy[1]],
+                color="#BDC3C7",
                 linestyle="--",
-                alpha=0.6,
-                linewidth=1.5,
+                linewidth=0.8,
+                alpha=0.5,
+                zorder=2,
             )
 
-            # 画点 (Text=星形, Anchor=圆形, Neg=叉形)
+            # 绘制样本点 (缩小 s, 增加 alpha)
             ax.scatter(
                 t_xy[0],
                 t_xy[1],
                 color=group_color,
                 marker="*",
-                s=300,
-                edgecolor="white",
-                label="Text" if k == 0 else "",
+                s=180,
+                alpha=0.7,
                 zorder=10,
+                label="Text" if k == 0 else "",
             )
             ax.scatter(
                 a_xy[0],
                 a_xy[1],
                 color=group_color,
                 marker="o",
-                s=150,
-                edgecolor="white",
-                label="Anchor" if k == 0 else "",
+                s=100,
+                alpha=0.7,
                 zorder=10,
+                label="Anchor" if k == 0 else "",
             )
             ax.scatter(
                 n_xy[0],
                 n_xy[1],
                 color=group_color,
                 marker="X",
-                s=150,
-                edgecolor="white",
-                label="Hard Neg" if k == 0 else "",
+                s=100,
+                alpha=0.7,
                 zorder=10,
+                label="Hard Neg" if k == 0 else "",
             )
 
-            # 标注组号
-            ax.text(
-                t_xy[0],
-                t_xy[1] + 0.5,
-                f"Case {k + 1}",
-                fontsize=12,
-                fontweight="bold",
-                color=group_color,
-                ha="center",
-            )
-
-        ax.set_title(title, fontweight="bold", fontsize=16)
+        ax.set_title(title, fontweight="bold", fontsize=15, pad=15)
         ax.set_xticks([])
         ax.set_yticks([])
-        sns.despine(left=True, bottom=True)
 
-        if i == 0:
-            # 自定义图例
-            from matplotlib.lines import Line2D
-
-            custom_lines = [
-                Line2D([0], [0], color="gray", linestyle="-"),
-                Line2D([0], [0], color="gray", linestyle="--"),
-            ]
-            ax.legend(
-                custom_lines,
-                ["Text-Anchor (Should be Close)", "Text-Negative (Should be Far)"],
-                loc="lower left",
-                fontsize=10,
-            )
+        # 移除边框 (Minimalist)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
 
     plt.suptitle(
-        "Embedding Space Evolution (Focus on Top-3 Improved Cases)",
+        "Embedding Evolution: Anchor-Centric Visualization",
         fontweight="bold",
-        y=0.95,
+        fontsize=18,
+        y=0.98,
     )
     plt.tight_layout()
-    plt.savefig(os.path.join(SAVE_DIR, "3_tsne_top3_focus.png"), dpi=300)
+    plt.savefig(
+        os.path.join(SAVE_DIR, "3_tsne_top3_focus.png"), dpi=300, bbox_inches="tight"
+    )
     plt.close()
 
 
