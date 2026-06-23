@@ -48,6 +48,14 @@ The objective increased separation between true sequence-text pairs and hard neg
 - Optional fine-tuned checkpoint:
   - `weights/ProTrek_35M/protrek_hm_35m_inference_only.pt`
 
+Hosted optional fine-tuned checkpoint:
+
+```text
+https://github.com/Dylan-Hzc/ProTrek-HM/releases/download/colabprotrek-hm-v0.1/protrek_hm_35m_inference_only.pt
+```
+
+This file is an inference-only ProTrek-HM 35M checkpoint exported from the original training checkpoint. It is intentionally hosted as a release asset instead of being committed to Git. The baseline-only path does not require this file; the optional fine-tuned comparison uses it when available.
+
 ## 6. Local Quick Start
 
 Activate the local environment:
@@ -92,8 +100,8 @@ The local export converted a roughly 1.8G training checkpoint into a roughly 678
 2. Use a GPU runtime if available.
 3. If the branch is not pushed, update `BRANCH` in the notebook after pushing or merging.
 4. Let the notebook download baseline ProTrek-35M from Hugging Face, or provide the baseline files manually.
-5. Upload the fine-tuned inference-only checkpoint separately to Google Drive, a GitHub Release, or Hugging Face.
-6. Fill `FINETUNED_CKPT_URL` or `GOOGLE_DRIVE_FINETUNED_PATH` in the notebook.
+5. The notebook includes the hosted GitHub Release URL for the optional fine-tuned inference-only checkpoint.
+6. If you use another checkpoint host, update `FINETUNED_CKPT_URL` or `GOOGLE_DRIVE_FINETUNED_PATH` in the notebook.
 7. Run baseline-only if the fine-tuned checkpoint is absent.
 
 ## 9. What is Deliberately Not Default
