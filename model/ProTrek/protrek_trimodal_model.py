@@ -3,9 +3,13 @@ import json
 import math
 import os
 import random
+import tempfile
 import time
 
-import faiss
+try:
+    import faiss
+except ImportError:
+    faiss = None
 import numpy as np
 import pandas as pd
 import torch
@@ -55,6 +59,14 @@ def multilabel_cross_entropy(logits, labels):
     # pos_loss = torch.logsumexp(pred_pos, dim=-1)
     #
     # return (neg_loss + pos_loss).mean()
+
+
+def _require_faiss():
+    if faiss is None:
+        raise ImportError(
+            "FAISS is required for full retrieval evaluation/index search, but it is "
+            "intentionally optional for the ColabProTrek-HM baseline sequence-text demo."
+        )
 
 
 @register_model
@@ -392,6 +404,7 @@ class ProTrekTrimodalModel(AbstractModel):
         return tensor
 
     def _get_protein_indices(self):
+        _require_faiss()
         world_size = dist.get_world_size()
         rank = dist.get_rank()
 
@@ -425,6 +438,7 @@ class ProTrekTrimodalModel(AbstractModel):
         return protein_indices
 
     def _get_structure_indices(self):
+        _require_faiss()
         world_size = dist.get_world_size()
         rank = dist.get_rank()
 
@@ -447,6 +461,7 @@ class ProTrekTrimodalModel(AbstractModel):
         return structure_indices
 
     def _get_text_indices(self):
+        _require_faiss()
         world_size = dist.get_world_size()
         rank = dist.get_rank()
 
@@ -564,7 +579,9 @@ class ProTrekTrimodalModel(AbstractModel):
         verbose = self.trainer.local_rank == 0
         if verbose:
             print("Evaluating on each subsection...")
-        tmp_path = f"/sujin/PycharmProjects/Pretraining/{time.time()}_{rank}.tsv"
+        tmp_root = os.path.join(tempfile.gettempdir(), "protrek_retrieval_eval")
+        os.makedirs(tmp_root, exist_ok=True)
+        tmp_path = os.path.join(tmp_root, f"{time.time()}_{rank}.tsv")
         mpr = MultipleProcessRunnerSimplifier(
             sub_inputs,
             do,
@@ -706,7 +723,9 @@ class ProTrekTrimodalModel(AbstractModel):
             print("Evaluating on each text...")
 
         # Add time stamp to the temporary file name to avoid conflicts
-        tmp_path = f"/sujin/PycharmProjects/Pretraining/{time.time()}_{rank}.tsv"
+        tmp_root = os.path.join(tempfile.gettempdir(), "protrek_retrieval_eval")
+        os.makedirs(tmp_root, exist_ok=True)
+        tmp_path = os.path.join(tmp_root, f"{time.time()}_{rank}.tsv")
         mpr = MultipleProcessRunnerSimplifier(
             sub_inputs,
             do,
